@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Dashboard</title>
+    <link rel="manifest" href="/manifest.json">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-info">
+        <div class="container">
+            <span class="navbar-brand">
+                <i class="fas fa-user"></i> Patient Dashboard
+            </span>
+            <div class="navbar-text me-3" id="patientName"></div>
+            <button class="btn btn-outline-light" onclick="logout(event)">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+    </nav>
+
+    <!-- Offline notification -->
+    <div id="offlineNotification"
+        style="display: none; background: #dc3545; color: white; padding: 10px; text-align: center;">
+        <i class="fas fa-wifi-slash"></i> You're offline - Only viewing your appointments. Connect to internet to book
+        new appointments.
+    </div>
+
+    <div class="container mt-4">
+        <!-- Tabs -->
+        <ul class="nav nav-tabs" id="patientTabs" role="tablist">
+            <li class="nav-item" role="presentation" id="bookTabLi">
+                <button class="nav-link active" id="book-tab" data-bs-toggle="tab" data-bs-target="#book" type="button">
+                    <i class="fas fa-plus"></i> Book Appointment
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="appointments-tab" data-bs-toggle="tab" data-bs-target="#appointments"
+                    type="button">
+                    <i class="fas fa-calendar-check"></i> My Appointments
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="patientTabsContent">
+            <!-- Book Appointment Tab -->
+            <div class="tab-pane fade show active" id="book" role="tabpanel">
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h4>Book New Appointment</h4>
+                    </div>
+                    <div class="card-body">
+                        <form id="bookForm">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Select Specialization</label>
+                                    <select class="form-control" id="specialization" required>
+                                        <option value="">Choose specialization...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Select Doctor</label>
+                                    <select class="form-control" id="doctorId" required>
+                                        <option value="">Choose doctor...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Date</label>
+                                    <input type="date" class="form-control" id="date" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Time Slot</label>
+                                    <select class="form-control" id="timeSlot" required>
+                                        <option value="">Select date first...</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 mb-3">
+                                    <label class="form-label">Notes (Optional)</label>
+                                    <textarea class="form-control" id="notes" rows="3"
+                                        placeholder="Describe your symptoms or concerns..."></textarea>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-calendar-plus"></i> Book Appointment
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- My Appointments Tab -->
+            <div class="tab-pane fade" id="appointments" role="tabpanel">
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h4>My Appointments</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="appointmentsContainer"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        let currentUser = null;
+
+        // Simple offline handling
+        function handleOfflineState() {
+            const isOffline = !navigator.onLine;
+            const offlineNotification = document.getElementById('offlineNotification');
+            const bookTabLi = document.getElementById('bookTabLi');
+            const bookTab = document.getElementById('book');
+            const appointmentsTab = document.getElementById('appointments-tab');
+
+            if (isOffline) {
+                // Show offline notification
+                offlineNotification.style.display = 'block';
+
+                // Hide book appointment tab
+                bookTabLi.style.display = 'none';
+
+                // Make appointments tab active
+                appointmentsTab.classList.add('active');
+                bookTab.classList.remove('show', 'active');
+                document.getElementById('appointments').classList.add('show', 'active');
+
+            } else {
+                // Hide offline notification
+                offlineNotification.style.display = 'none';
+
+                // Show book appointment tab
+                bookTabLi.style.display = 'block';
+            }
+        }
+
+        // Listen for online/offline events
+        window.addEventListener('online', handleOfflineState);
+        window.addEventListener('offline', handleOfflineState);
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const userData = sessionStorage.getItem('user');
+            if (!userData) {
+                window.location.href = '/';
+                return;
+            }
+
+            currentUser = JSON.parse(userData);
+            if (currentUser.role !== 'patient') {
+                window.location.href = '/';
+                return;
+            }
+
+            document.getElementById('patientName').textContent = currentUser.name;
+
+            // Set minimum date to today
+            document.getElementById('date').min = new Date().toISOString().split('T')[0];
+
+            // Check initial offline state
+            handleOfflineState();
+
+            loadSpecializations();
+            loadAppointments();
+        });
+
+        // Load specializations
+        async function loadSpecializations() {
+            if (!navigator.onLine) return;
+
+            try {
+                const response = await fetch('/api/specializations');
+                const specializations = await response.json();
+
+                const select = document.getElementById('specialization');
+                specializations.forEach(spec => {
+                    const option = document.createElement('option');
+                    option.value = spec;
+                    option.textContent = spec;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading specializations:', error);
+            }
+        }
+
+        // Load doctors by specialization
+        document.getElementById('specialization').addEventListener('change', async function () {
+            if (!navigator.onLine) return;
+
+            const specialization = this.value;
+            const doctorSelect = document.getElementById('doctorId');
+
+            doctorSelect.innerHTML = '<option value="">Choose doctor...</option>';
+
+            if (specialization) {
+                try {
+                    const response = await fetch(`/api/doctors/specialization/${specialization}`);
+                    const doctors = await response.json();
+
+                    doctors.forEach(doctor => {
+                        const option = document.createElement('option');
+                        option.value = doctor._id;
+                        option.textContent = doctor.name;
+                        doctorSelect.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error('Error loading doctors:', error);
+                }
+            }
+        });
+
+        // Load available slots
+        document.getElementById('date').addEventListener('change', loadAvailableSlots);
+        document.getElementById('doctorId').addEventListener('change', loadAvailableSlots);
+
+        async function loadAvailableSlots() {
+            if (!navigator.onLine) return;
+
+            const doctorId = document.getElementById('doctorId').value;
+            const date = document.getElementById('date').value;
+            const slotSelect = document.getElementById('timeSlot');
+
+            slotSelect.innerHTML = '<option value="">Select time...</option>';
+
+            if (doctorId && date) {
+                try {
+                    const response = await fetch(`/api/appointments/available/${doctorId}/${date}`);
+                    const slots = await response.json();
+
+                    if (slots.length === 0) {
+                        slotSelect.innerHTML = '<option value="">No slots available</option>';
+                        return;
+                    }
+
+                    slots.forEach(slot => {
+                        const option = document.createElement('option');
+                        option.value = slot;
+                        option.textContent = slot;
+                        slotSelect.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error('Error loading slots:', error);
+                }
+            }
+        }
+
+        // Book appointment
+        document.getElementById('bookForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            if (!navigator.onLine) {
+                alert('You are offline. Please connect to the internet to book appointments.');
+                return;
+            }
+
+            const formData = {
+                patientId: currentUser.id,
+                doctorId: document.getElementById('doctorId').value,
+                date: document.getElementById('date').value,
+                timeSlot: document.getElementById('timeSlot').value,
+                notes: document.getElementById('notes').value
+            };
+
+            try {
+                const response = await fetch('/api/appointments', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('Appointment booked successfully!');
+                    document.getElementById('bookForm').reset();
+                    loadAppointments();
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (error) {
+                alert('Network error. Please try again.');
+            }
+        });
+
+        // Load patient appointments (works offline with cached data)
+        async function loadAppointments() {
+            try {
+                const response = await fetch(`/api/appointments/me`,
+                    { credentials: 'same-origin' ,
+                        method: 'GET'
+                    }
+                );
+                const appointments = await response.json();
+
+                const container = document.getElementById('appointmentsContainer');
+
+                if (appointments.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No appointments found.</p>';
+                    return;
+                }
+
+                container.innerHTML = appointments.map(apt => `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <h5>Dr. ${apt.doctorId?.name || 'Unknown Doctor'}</h5>                     
+                                    <p class="mb-1"><strong>Specialization:</strong> ${apt.doctorId?.specialization || 'N/A'}</p>                                    <p class="mb-1"><strong>Date:</strong> ${new Date(apt.date).toLocaleDateString()}</p>
+                                    <p class="mb-1"><strong>Time:</strong> ${apt.timeSlot}</p>
+                                    ${apt.notes ? `<p class="mb-1"><strong>Notes:</strong> ${apt.notes}</p>` : ''}
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <span class="badge ${apt.status === 'scheduled' ? 'bg-warning' : apt.status === 'completed' ? 'bg-success' : 'bg-danger'}">${apt.status}</span><br>
+                                    <small class="text-muted">Booked: ${new Date(apt.createdAt).toLocaleDateString()}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading appointments:', error);
+            }
+        }
+
+      async function logout(e) {
+  const btn = e?.currentTarget || e?.target;
+  const orig = btn.innerHTML;
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging out...';
+    const res = await fetch('/api/logout', { method:'POST', credentials:'same-origin' });
+    // handle response...
+    sessionStorage.removeItem('user');
+    window.location.href = '/';
+  } catch (err) {
+    console.error(err);
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Healthcare Login</title>
+    <link rel="manifest" href="/manifest.json">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        .install-prompt {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #007bff;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            display: none;
+            cursor: pointer;
+            z-index: 1000;
+        }
+
+        .install-prompt:hover {
+            background: #0056b3;
+        }
+
+        .form-toggle {
+            cursor: pointer;
+            text-decoration: underline;
+            color: #007bff;
+        }
+
+        .form-toggle:hover {
+            color: #0056b3;
+        }
+
+        #registerForm {
+            display: none;
+        }
+
+        .retry-button {
+            margin-top: 10px;
+        }
+
+        .loading-spinner {
+            display: none;
+            margin-right: 10px;
+        }
+
+        .btn:disabled {
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body class="bg-light">
+    <!-- PWA Install Button -->
+    <div id="installPrompt" class="install-prompt">
+        <i class="fas fa-download"></i> Install App
+    </div>
+
+    <div class="container">
+        <div class="row justify-content-center mt-5">
+            <div class="col-md-6 col-lg-5">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white text-center">
+                        <h3><i class="fas fa-hospital"></i> Healthcare System</h3>
+                    </div>
+                    <div class="card-body">
+                        <!-- Login Form -->
+                        <form id="loginForm">
+                            <h5 class="mb-3 text-center">Login</h5>
+                            <div class="mb-3">
+                                <label class="form-label">Username</label>
+                                <input type="text" class="form-control" id="loginUsername" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Password</label>
+                                <input type="password" class="form-control" id="loginPassword" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100" id="loginBtn">
+                                <span class="loading-spinner">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                </span>
+                                <i class="fas fa-sign-in-alt"></i> Login
+                            </button>
+                            <div class="text-center mt-3">
+                                <small class="form-toggle" onclick="toggleForms()">
+                                    New patient? Register here
+                                </small>
+                            </div>
+                        </form>
+
+                        <!-- Register Form -->
+                        <form id="registerForm">
+                            <h5 class="mb-3 text-center">Patient Registration</h5>
+                            <div class="mb-3">
+                                <label class="form-label">Username</label>
+                                <input type="text" class="form-control" id="regUsername" required>
+                                <div class="form-text">Choose a unique username</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Password</label>
+                                <input type="password" class="form-control" id="regPassword" required minlength="6">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Full Name</label>
+                                <input type="text" class="form-control" id="regName" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Email</label>
+                                <input type="email" class="form-control" id="regEmail" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Phone (Optional)</label>
+                                <input type="tel" class="form-control" id="regPhone">
+                            </div>
+                            <button type="submit" class="btn btn-success w-100" id="registerBtn">
+                                <span class="loading-spinner">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                </span>
+                                <i class="fas fa-user-plus"></i> Register as Patient
+                            </button>
+                            <div class="text-center mt-3">
+                                <small class="form-toggle" onclick="toggleForms()">
+                                    Already have an account? Login here
+                                </small>
+                            </div>
+                        </form>
+
+                        <div id="errorMsg" class="alert alert-danger mt-3" style="display: none;"></div>
+                        <div id="successMsg" class="alert alert-success mt-3" style="display: none;"></div>
+
+                        <!-- Demo Credentials -->
+                        <div class="mt-4" id="demoCredentials">
+                            <h6 class="text-muted">Demo Credentials:</h6>
+                            <small class="text-muted">
+                                Admin: admin / admin123<br>
+                                Patient: patient1 / 123456<br>
+                                Doctor: dr_cardio / 123456
+                            </small>
+                        </div>
+
+                        <!-- Connection Status -->
+                        <div id="connectionStatus" class="mt-3 text-center">
+                            <span id="onlineStatus" class="badge bg-success">
+                                <i class="fas fa-wifi"></i> Online
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let deferredPrompt;
+        let isLoginForm = true;
+
+        // Toggle between login and register forms
+        function toggleForms() {
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            const demoCredentials = document.getElementById('demoCredentials');
+            const errorDiv = document.getElementById('errorMsg');
+            const successDiv = document.getElementById('successMsg');
+
+            // Hide any messages
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+
+            if (isLoginForm) {
+                loginForm.style.display = 'none';
+                registerForm.style.display = 'block';
+                demoCredentials.style.display = 'none';
+                isLoginForm = false;
+            } else {
+                loginForm.style.display = 'block';
+                registerForm.style.display = 'none';
+                demoCredentials.style.display = 'block';
+                isLoginForm = true;
+            }
+        }
+
+        // PWA Install Prompt
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const installPromptEl = document.getElementById('installPrompt');
+            if (installPromptEl) {
+                installPromptEl.style.display = 'block';
+            }
+        });
+
+        const installPromptEl = document.getElementById('installPrompt');
+        if (installPromptEl) {
+            installPromptEl.addEventListener('click', () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then((choiceResult) => {
+                        if (choiceResult.outcome === 'accepted') {
+                            console.log('User accepted the install prompt');
+                        }
+                        deferredPrompt = null;
+                        installPromptEl.style.display = 'none';
+                    });
+                }
+            });
+        }
+
+        // Connection Status
+        function updateConnectionStatus() {
+            const statusEl = document.getElementById('onlineStatus');
+            if (statusEl) {
+                if (navigator.onLine) {
+                    statusEl.className = 'badge bg-success';
+                    statusEl.innerHTML = '<i class="fas fa-wifi"></i> Online';
+                } else {
+                    statusEl.className = 'badge bg-danger';
+                    statusEl.innerHTML = '<i class="fas fa-wifi-slash"></i> Offline';
+                }
+            }
+        }
+
+        window.addEventListener('online', updateConnectionStatus);
+        window.addEventListener('offline', updateConnectionStatus);
+        updateConnectionStatus();
+
+        // Enhanced error handling function
+        function showMessage(message, type = 'error', showRetry = false) {
+            const errorDiv = document.getElementById('errorMsg');
+            const successDiv = document.getElementById('successMsg');
+            
+            if (type === 'success') {
+                successDiv.innerHTML = message;
+                successDiv.style.display = 'block';
+                errorDiv.style.display = 'none';
+            } else {
+                let errorHTML = message;
+                
+                // Add retry button for specific errors
+                if (showRetry) {
+                    errorHTML += `
+                        <div class="retry-button">
+                            <button class="btn btn-sm btn-outline-danger" onclick="retryConnection()">
+                                <i class="fas fa-redo"></i> Retry Connection
+                            </button>
+                        </div>
+                    `;
+                }
+                
+                errorDiv.innerHTML = errorHTML;
+                errorDiv.style.display = 'block';
+                successDiv.style.display = 'none';
+            }
+        }
+
+        // Retry connection function
+        function retryConnection() {
+            const currentForm = isLoginForm ? 'loginForm' : 'registerForm';
+            document.getElementById(currentForm).dispatchEvent(new Event('submit'));
+        }
+
+        // Show/hide loading spinner
+        function toggleLoading(formType, isLoading) {
+            const btn = document.getElementById(formType === 'login' ? 'loginBtn' : 'registerBtn');
+            const spinner = btn.querySelector('.loading-spinner');
+            
+            if (isLoading) {
+                spinner.style.display = 'inline';
+                btn.disabled = true;
+                btn.style.cursor = 'not-allowed';
+            } else {
+                spinner.style.display = 'none';
+                btn.disabled = false;
+                btn.style.cursor = 'pointer';
+            }
+        }
+
+        // Enhanced Login Form Handler
+        document.getElementById('loginForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+
+            // Show loading
+            toggleLoading('login', true);
+
+            // Check if offline
+            if (!navigator.onLine) {
+                toggleLoading('login', false);
+                showMessage('You are offline. Please connect to the internet to login.', 'error', true);
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                      credentials: 'same-origin', // or 'include' if cross-origin
+
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    sessionStorage.setItem('user', JSON.stringify(data.user));
+                    sessionStorage.setItem('lastLogin', new Date().toISOString());
+                    window.location.href = `/${data.user.role}`;
+                } else {
+                    toggleLoading('login', false);
+                    
+                    if (response.status === 503) {
+                        if (data.offline) {
+                            showMessage('You are currently offline. Please check your internet connection and try again.', 'error', true);
+                        } else {
+                            showMessage('Server is temporarily unavailable. Please try again in a moment.', 'error', true);
+                        }
+                    } else if (response.status === 401) {
+                        showMessage('Invalid username or password. Please check your credentials and try again.', 'error');
+                    } else if (response.status >= 500) {
+                        showMessage('Server error occurred. Please try again later.', 'error', true);
+                    } else {
+                        showMessage(data.message || 'Login failed. Please try again.', 'error');
+                    }
+                }
+            } catch (error) {
+                toggleLoading('login', false);
+                console.error('Login error:', error);
+                
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    showMessage('Unable to connect to server. Please check your internet connection.', 'error', true);
+                } else {
+                    showMessage('Network error occurred. Please check your connection and try again.', 'error', true);
+                }
+            }
+        });
+
+        
+        document.getElementById('registerForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const username = document.getElementById('regUsername').value;
+            const password = document.getElementById('regPassword').value;
+            const name = document.getElementById('regName').value;
+            const email = document.getElementById('regEmail').value;
+            const phone = document.getElementById('regPhone').value;
+
+            toggleLoading('register', true);
+
+            // Check if off        line
+            if (!navigator.onLine) {
+                toggleLoading('register', false);
+                showMessage('You are offline. Please connect to the internet to register.', 'error', true);
+                return;
+            }
+
+            // Basic validation
+            if (password.length < 6) {
+                toggleLoading('register', false);
+                showMessage('Password must be at least 6 characters long.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username,
+                        password,
+                        name,
+                        email,
+                        phone,
+                        role: 'patient'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    toggleLoading('register', false);
+                    showMessage('Registration successful! You can now login with your credentials.', 'success');
+                    document.getElementById('registerForm').reset();
+                    setTimeout(() => {
+                        toggleForms();
+                    }, 2000);
+                } else {
+                    toggleLoading('register', false);
+                    
+                    if (response.status === 503) {
+                        if (data.offline) {
+                            showMessage('You are currently offline. Please check your internet connection and try again.', 'error', true);
+                        } else {
+                            showMessage('Server is temporarily unavailable. Please try again in a moment.', 'error', true);
+                        }
+                    } else if (response.status >= 500) {
+                        showMessage('Server error occurred. Please try again later.', 'error', true);
+                    } else {
+                        showMessage(data.message || 'Registration failed. Please try again.', 'error');
+                    }
+                }
+            } catch (error) {
+                toggleLoading('register', false);
+                console.error('Registration error:', error);
+                
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    showMessage('Unable to connect to server. Please check your internet connection.', 'error', true);
+                } else {
+                    showMessage('Network error occurred. Please check your connection and try again.', 'error', true);
+                }
+            }
+        });
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log(' SW registered: ', registration);
+                    })
+                    .catch(registrationError => {
+                        console.log(' SW registration failed: ', registrationError);
+                    });
+            });
+        }
+    </script>
+</body>
+
+</html>

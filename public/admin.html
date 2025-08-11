@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="manifest" href="/manifest.json">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <span class="navbar-brand">
+                <i class="fas fa-user-shield"></i> Admin Dashboard
+            </span>
+            <button class="btn btn-outline-light" onclick="logout(event)">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Tabs -->
+        <ul class="nav nav-tabs" id="adminTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="doctors-tab" data-bs-toggle="tab" data-bs-target="#doctors"
+                    type="button">
+                    <i class="fas fa-user-md"></i> Manage Doctors
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="appointments-tab" data-bs-toggle="tab" data-bs-target="#appointments"
+                    type="button">
+                    <i class="fas fa-calendar-check"></i> All Appointments
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button">
+                    <i class="fas fa-users"></i> All Users
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="adminTabsContent">
+            <!-- Doctors Management Tab -->
+            <div class="tab-pane fade show active" id="doctors" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <h4>Doctor Management</h4>
+                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addDoctorModal">
+                        <i class="fas fa-plus"></i> Add Doctor
+                    </button>
+                </div>
+                <div id="doctorsContainer" class="mt-3"></div>
+            </div>
+
+            <!-- Appointments Tab -->
+            <div class="tab-pane fade" id="appointments" role="tabpanel">
+                <h4 class="mt-3">All Appointments</h4>
+                <div id="appointmentsContainer" class="mt-3"></div>
+            </div>
+
+            <!-- Users Tab -->
+            <div class="tab-pane fade" id="users" role="tabpanel">
+                <h4 class="mt-3">All Users</h4>
+                <div id="usersContainer" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Doctor Modal -->
+    <div class="modal fade" id="addDoctorModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Doctor</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="addDoctorForm">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-control" id="newUsername" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-control" id="newPassword" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Full Name</label>
+                            <input type="text" class="form-control" id="newName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="newEmail" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Phone</label>
+                            <input type="tel" class="form-control" id="newPhone">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Specialization</label>
+                            <input type="text" class="form-control" id="newSpecialization" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">Add Doctor</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+
+        // Offline Request Blocking and UI Management
+        (function () {
+            let isOffline = !navigator.onLine;
+            let originalFetch = window.fetch;
+
+            // Create offline overlay
+            function createOfflineOverlay() {
+                const overlay = document.createElement('div');
+                overlay.id = 'offlineOverlay';
+                overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        `;
+
+                overlay.innerHTML = `
+            <div style="text-align: center; background: rgba(220, 53, 69, 0.9); padding: 2rem; border-radius: 10px;">
+                <i class="fas fa-wifi-slash" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                <h4>Action Blocked - You're Offline</h4>
+                <p>This action requires an internet connection.</p>
+                <button onclick="document.getElementById('offlineOverlay').remove()" 
+                        style="background: white; color: #dc3545; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
+                    OK
+                </button>
+            </div>
+        `;
+
+                document.body.appendChild(overlay);
+
+                // Auto-remove after 5 seconds
+                setTimeout(() => {
+                    if (document.getElementById('offlineOverlay')) {
+                        overlay.remove();
+                    }
+                }, 5000);
+            }
+
+            // Create offline notification bar
+            function createOfflineNotification() {
+                const notification = document.createElement('div');
+                notification.id = 'offlineNotification';
+                notification.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: #dc3545;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            z-index: 1000;
+            font-weight: 500;
+        `;
+
+                notification.innerHTML = `
+            <i class="fas fa-wifi-slash"></i> 
+            You're offline - Only viewing cached data. Some features are disabled.
+            <button onclick="location.reload()" 
+                    style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 5px 10px; border-radius: 3px; margin-left: 10px; cursor: pointer;">
+                <i class="fas fa-sync-alt"></i> Retry
+            </button>
+        `;
+
+                document.body.style.paddingTop = '50px';
+                document.body.insertBefore(notification, document.body.firstChild);
+            }
+
+            // Remove offline notification
+            function removeOfflineNotification() {
+                const notification = document.getElementById('offlineNotification');
+                if (notification) {
+                    notification.remove();
+                    document.body.style.paddingTop = '0';
+                }
+            }
+
+            // Override fetch to block offline requests
+            window.fetch = function (...args) {
+                const [url, options] = args;
+
+                // Check if it's an API request and we're offline
+                if (!navigator.onLine && url.includes('/api/')) {
+                    const method = (options && options.method) || 'GET';
+
+                    // Block POST, PUT, DELETE requests when offline
+                    if (['POST', 'PUT', 'DELETE'].includes(method.toUpperCase())) {
+                        createOfflineOverlay();
+
+                        // Return a rejected promise that looks like a failed fetch
+                        return Promise.reject(new TypeError('Failed to fetch: Offline'));
+                    }
+                }
+
+                // Allow the request to proceed
+                return originalFetch.apply(this, args);
+            };
+
+            // Disable form submissions when offline
+            function handleFormSubmission(event) {
+                if (!navigator.onLine) {
+                    event.preventDefault();
+                    createOfflineOverlay();
+                }
+            }
+
+            // Disable button clicks for certain actions when offline
+            function handleButtonClick(event) {
+                if (!navigator.onLine) {
+                    const button = event.target.closest('button');
+                    if (button && (
+                        button.textContent.toLowerCase().includes('add') ||
+                        button.textContent.toLowerCase().includes('delete') ||
+                        button.textContent.toLowerCase().includes('save') ||
+                        button.textContent.toLowerCase().includes('update') ||
+                        button.classList.contains('btn-danger') ||
+                        button.classList.contains('btn-success')
+                    )) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        createOfflineOverlay();
+                    }
+                }
+            }
+
+            // Update UI based on connection status
+            function updateOfflineUI() {
+                if (!navigator.onLine && !isOffline) {
+                    // Just went offline
+                    isOffline = true;
+                    createOfflineNotification();
+
+                    // Disable all form inputs
+                    document.querySelectorAll('form input, form select, form textarea').forEach(el => {
+                        if (!el.hasAttribute('data-offline-readonly-original')) {
+                            el.setAttribute('data-offline-readonly-original', el.readOnly);
+                            el.readOnly = true;
+                            el.style.opacity = '0.6';
+                        }
+                    });
+
+                    // Disable action buttons
+                    document.querySelectorAll('button').forEach(button => {
+                        if (button.textContent.toLowerCase().includes('add') ||
+                            button.textContent.toLowerCase().includes('delete') ||
+                            button.textContent.toLowerCase().includes('save') ||
+                            button.textContent.toLowerCase().includes('update') ||
+                            button.classList.contains('btn-danger') ||
+                            button.classList.contains('btn-success')) {
+                            button.disabled = true;
+                            button.style.opacity = '0.5';
+                            button.setAttribute('data-offline-disabled', 'true');
+                        }
+                    });
+
+                } else if (navigator.onLine && isOffline) {
+                    // Just came back online
+                    isOffline = false;
+                    removeOfflineNotification();
+
+                    // Re-enable form inputs
+                    document.querySelectorAll('form input, form select, form textarea').forEach(el => {
+                        if (el.hasAttribute('data-offline-readonly-original')) {
+                            el.readOnly = el.getAttribute('data-offline-readonly-original') === 'true';
+                            el.style.opacity = '1';
+                            el.removeAttribute('data-offline-readonly-original');
+                        }
+                    });
+
+                    // Re-enable buttons
+                    document.querySelectorAll('button[data-offline-disabled]').forEach(button => {
+                        button.disabled = false;
+                        button.style.opacity = '1';
+                        button.removeAttribute('data-offline-disabled');
+                    });
+                }
+            }
+
+            // Listen for online/offline events
+            window.addEventListener('online', updateOfflineUI);
+            window.addEventListener('offline', updateOfflineUI);
+
+            // Listen for form submissions
+            document.addEventListener('submit', handleFormSubmission);
+
+            // Listen for button clicks
+            document.addEventListener('click', handleButtonClick);
+
+            // Initial UI update
+            document.addEventListener('DOMContentLoaded', updateOfflineUI);
+
+            // Check connection status on page load
+            if (!navigator.onLine) {
+                isOffline = true;
+                setTimeout(updateOfflineUI, 100);
+            }
+        })();
+
+        let currentUser = null;
+
+        // Check authentication
+        document.addEventListener('DOMContentLoaded', function () {
+            const userData = sessionStorage.getItem('user');
+            if (!userData) {
+                window.location.href = '/';
+                return;
+            }
+
+            currentUser = JSON.parse(userData);
+            if (currentUser.role !== 'admin') {
+                window.location.href = '/';
+                return;
+            }
+
+            loadDoctors();
+            loadAppointments();
+            loadUsers();
+        });
+
+        // Load doctors
+        async function loadDoctors() {
+            try {
+                const response = await fetch('/api/doctors');
+                const doctors = await response.json();
+
+                const container = document.getElementById('doctorsContainer');
+                container.innerHTML = doctors.map(doctor => `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h5>${doctor.name}</h5>
+                                    <p class="mb-1"><strong>Specialization:</strong> ${doctor.specialization}</p>
+                                    <p class="mb-1"><strong>Email:</strong> ${doctor.email}</p>
+                                    <p class="mb-0"><strong>Phone:</strong> ${doctor.phone || 'N/A'}</p>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <button class="btn btn-danger btn-sm" onclick="deleteDoctor('${doctor._id}', '${doctor.name}')">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading doctors:', error);
+            }
+        }
+
+        // Add doctor
+        document.getElementById('addDoctorForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const formData = {
+                username: document.getElementById('newUsername').value,
+                password: document.getElementById('newPassword').value,
+                name: document.getElementById('newName').value,
+                email: document.getElementById('newEmail').value,
+                phone: document.getElementById('newPhone').value,
+                specialization: document.getElementById('newSpecialization').value
+            };
+
+            try {
+                const response = await fetch('/api/doctors', {
+                    method: 'POST',credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('Doctor added successfully!');
+                    document.getElementById('addDoctorForm').reset();
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addDoctorModal'));
+                    modal.hide();
+                    loadDoctors();
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (error) {
+                alert('Network error. Please try again.');
+            }
+        });
+
+        // Delete doctor
+        async function deleteDoctor(doctorId, doctorName) {
+            if (confirm(`Are you sure you want to delete Dr. ${doctorName}?`)) {
+                try {
+                    const response = await fetch(`/api/doctors/${doctorId}`, {
+                        method: 'DELETE',credentials: 'same-origin',
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        alert('Doctor deleted successfully!');
+                        loadDoctors();
+                    } else {
+                        alert('Error: ' + result.message);
+                    }
+                } catch (error) {
+                    alert('Network error. Please try again.');
+                }
+            }
+        }
+
+        // Load appointments
+        async function loadAppointments() {
+            try {
+                const response = await fetch('/api/appointments');
+                const appointments = await response.json();
+
+                const container = document.getElementById('appointmentsContainer');
+                container.innerHTML = appointments.map(apt => `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Patient: ${apt.patientId.name}</h6>
+                                    <p class="mb-1">Email: ${apt.patientId.email}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Doctor: ${apt.doctorId.name}</h6>
+                                    <p class="mb-1">Specialization: ${apt.doctorId.specialization}</p>
+                                </div>
+                                <div class="col-12 mt-2">
+                                    <span class="badge bg-secondary">${new Date(apt.date).toLocaleDateString()}</span>
+                                    <span class="badge bg-info">${apt.timeSlot}</span>
+                                    <span class="badge ${apt.status === 'scheduled' ? 'bg-warning' : apt.status === 'completed' ? 'bg-success' : 'bg-danger'}">${apt.status}</span>
+                                    ${apt.notes ? `<p class="mt-2 mb-0"><small>Notes: ${apt.notes}</small></p>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading appointments:', error);
+            }
+        }
+
+        // Load users
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/users');
+                const users = await response.json();
+
+                const container = document.getElementById('usersContainer');
+                container.innerHTML = users.map(user => `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h5>${user.name}</h5>
+                                    <p class="mb-1"><strong>Role:</strong> <span class="badge ${user.role === 'admin' ? 'bg-danger' : user.role === 'doctor' ? 'bg-primary' : 'bg-secondary'}">${user.role}</span></p>
+                                    <p class="mb-1"><strong>Email:</strong> ${user.email}</p>
+                                    <p class="mb-0"><strong>Phone:</strong> ${user.phone || 'N/A'}</p>
+                                    ${user.specialization ? `<p class="mb-0"><strong>Specialization:</strong> ${user.specialization}</p>` : ''}
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <small class="text-muted">Joined: ${new Date(user.createdAt).toLocaleDateString()}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+
+       async function logout(e) {
+  const btn = e?.currentTarget || e?.target;
+  const orig = btn.innerHTML;
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging out...';
+    const res = await fetch('/api/logout', { method:'POST', credentials:'same-origin' });
+    // handle response...
+    sessionStorage.removeItem('user');
+    window.location.href = '/';
+  } catch (err) {
+    console.error(err);
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+    </script>
+</body>
+
+</html>

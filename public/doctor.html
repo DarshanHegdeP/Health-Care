@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doctor Dashboard</title>
+    <link rel="manifest" href="/manifest.json">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-success">
+        <div class="container">
+            <span class="navbar-brand">
+                <i class="fas fa-user-md"></i> Doctor Dashboard
+            </span>
+            <div class="navbar-text me-3" id="doctorName"></div>
+            <button class="btn btn-outline-light" onclick="logout(event)">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4><i class="fas fa-calendar-check"></i> My Appointments</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="appointmentsContainer"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Offline Request Blocking and UI Management
+        (function () {
+            let isOffline = !navigator.onLine;
+            let originalFetch = window.fetch;
+
+            // Create offline overlay
+            function createOfflineOverlay() {
+                const overlay = document.createElement('div');
+                overlay.id = 'offlineOverlay';
+                overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        `;
+
+                overlay.innerHTML = `
+            <div style="text-align: center; background: rgba(220, 53, 69, 0.9); padding: 2rem; border-radius: 10px;">
+                <i class="fas fa-wifi-slash" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                <h4>Action Blocked - You're Offline</h4>
+                <p>This action requires an internet connection.</p>
+                <button onclick="document.getElementById('offlineOverlay').remove()" 
+                        style="background: white; color: #dc3545; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
+                    OK
+                </button>
+            </div>
+        `;
+
+                document.body.appendChild(overlay);
+
+                // Auto-remove after 5 seconds
+                setTimeout(() => {
+                    if (document.getElementById('offlineOverlay')) {
+                        overlay.remove();
+                    }
+                }, 5000);
+            }
+
+            // Create offline notification bar
+            function createOfflineNotification() {
+                const notification = document.createElement('div');
+                notification.id = 'offlineNotification';
+                notification.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: #dc3545;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            z-index: 1000;
+            font-weight: 500;
+        `;
+
+                notification.innerHTML = `
+            <i class="fas fa-wifi-slash"></i> 
+            You're offline - Only viewing cached data. Some features are disabled.
+            <button onclick="location.reload()" 
+                    style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 5px 10px; border-radius: 3px; margin-left: 10px; cursor: pointer;">
+                <i class="fas fa-sync-alt"></i> Retry
+            </button>
+        `;
+
+                document.body.style.paddingTop = '50px';
+                document.body.insertBefore(notification, document.body.firstChild);
+            }
+
+            // Remove offline notification
+            function removeOfflineNotification() {
+                const notification = document.getElementById('offlineNotification');
+                if (notification) {
+                    notification.remove();
+                    document.body.style.paddingTop = '0';
+                }
+            }
+
+            // Override fetch to block offline requests
+            window.fetch = function (...args) {
+                const [url, options] = args;
+
+                // Check if it's an API request and we're offline
+                if (!navigator.onLine && url.includes('/api/')) {
+                    const method = (options && options.method) || 'GET';
+
+                    // Block POST, PUT, DELETE requests when offline
+                    if (['POST', 'PUT', 'DELETE'].includes(method.toUpperCase())) {
+                        createOfflineOverlay();
+
+                        // Return a rejected promise that looks like a failed fetch
+                        return Promise.reject(new TypeError('Failed to fetch: Offline'));
+                    }
+                }
+
+                // Allow the request to proceed
+                return originalFetch.apply(this, args);
+            };
+
+            // Disable form submissions when offline
+            function handleFormSubmission(event) {
+                if (!navigator.onLine) {
+                    event.preventDefault();
+                    createOfflineOverlay();
+                }
+            }
+
+            // Disable button clicks for certain actions when offline
+            function handleButtonClick(event) {
+                if (!navigator.onLine) {
+                    const button = event.target.closest('button');
+                    if (button && (
+                        button.textContent.toLowerCase().includes('add') ||
+                        button.textContent.toLowerCase().includes('delete') ||
+                        button.textContent.toLowerCase().includes('save') ||
+                        button.textContent.toLowerCase().includes('update') ||
+                        button.classList.contains('btn-danger') ||
+                        button.classList.contains('btn-success')
+                    )) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        createOfflineOverlay();
+                    }
+                }
+            }
+
+            // Update UI based on connection status
+            function updateOfflineUI() {
+                if (!navigator.onLine && !isOffline) {
+                    // Just went offline
+                    isOffline = true;
+                    createOfflineNotification();
+
+                    // Disable all form inputs
+                    document.querySelectorAll('form input, form select, form textarea').forEach(el => {
+                        if (!el.hasAttribute('data-offline-readonly-original')) {
+                            el.setAttribute('data-offline-readonly-original', el.readOnly);
+                            el.readOnly = true;
+                            el.style.opacity = '0.6';
+                        }
+                    });
+
+                    // Disable action buttons
+                    document.querySelectorAll('button').forEach(button => {
+                        if (button.textContent.toLowerCase().includes('add') ||
+                            button.textContent.toLowerCase().includes('delete') ||
+                            button.textContent.toLowerCase().includes('save') ||
+                            button.textContent.toLowerCase().includes('update') ||
+                            button.classList.contains('btn-danger') ||
+                            button.classList.contains('btn-success')) {
+                            button.disabled = true;
+                            button.style.opacity = '0.5';
+                            button.setAttribute('data-offline-disabled', 'true');
+                        }
+                    });
+
+                } else if (navigator.onLine && isOffline) {
+                    // Just came back online
+                    isOffline = false;
+                    removeOfflineNotification();
+
+                    // Re-enable form inputs
+                    document.querySelectorAll('form input, form select, form textarea').forEach(el => {
+                        if (el.hasAttribute('data-offline-readonly-original')) {
+                            el.readOnly = el.getAttribute('data-offline-readonly-original') === 'true';
+                            el.style.opacity = '1';
+                            el.removeAttribute('data-offline-readonly-original');
+                        }
+                    });
+
+                    // Re-enable buttons
+                    document.querySelectorAll('button[data-offline-disabled]').forEach(button => {
+                        button.disabled = false;
+                        button.style.opacity = '1';
+                        button.removeAttribute('data-offline-disabled');
+                    });
+                }
+            }
+
+            // Listen for online/offline events
+            window.addEventListener('online', updateOfflineUI);
+            window.addEventListener('offline', updateOfflineUI);
+
+            // Listen for form submissions
+            document.addEventListener('submit', handleFormSubmission);
+
+            // Listen for button clicks
+            document.addEventListener('click', handleButtonClick);
+
+            // Initial UI update
+            document.addEventListener('DOMContentLoaded', updateOfflineUI);
+
+            // Check connection status on page load
+            if (!navigator.onLine) {
+                isOffline = true;
+                setTimeout(updateOfflineUI, 100);
+            }
+        })();
+
+        let currentUser = null;
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const userData = sessionStorage.getItem('user');
+            if (!userData) {
+                window.location.href = '/';
+                return;
+            }
+
+            currentUser = JSON.parse(userData);
+            if (currentUser.role !== 'doctor') {
+                window.location.href = '/';
+                return;
+            }
+
+            document.getElementById('doctorName').textContent = currentUser.name;
+            loadAppointments();
+        });
+
+        async function loadAppointments() {
+            try {
+                const response = await fetch(`/api/appointments/doctor/me`, {
+                  credentials: 'same-origin'
+                });
+                const appointments = await response.json();
+
+                const container = document.getElementById('appointmentsContainer');
+
+                if (appointments.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No appointments found.</p>';
+                    return;
+                }
+
+                container.innerHTML = appointments.map(apt => `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <h5>${apt.patientId.name}</h5>
+                                    <p class="mb-1"><strong>Email:</strong> ${apt.patientId.email}</p>
+                                    <p class="mb-1"><strong>Phone:</strong> ${apt.patientId.phone || 'N/A'}</p>
+                                    <p class="mb-1"><strong>Date:</strong> ${new Date(apt.date).toLocaleDateString()}</p>
+                                    <p class="mb-1"><strong>Time:</strong> ${apt.timeSlot}</p>
+                                    ${apt.notes ? `<p class="mb-1"><strong>Notes:</strong> ${apt.notes}</p>` : ''}
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <span class="badge ${apt.status === 'scheduled' ? 'bg-warning' : apt.status === 'completed' ? 'bg-success' : 'bg-danger'} mb-2">${apt.status}</span><br>
+                                    ${apt.status === 'scheduled' ? `
+                                        <button class="btn btn-success btn-sm me-1" onclick="updateStatus('${apt._id}', 'completed')">
+                                            <i class="fas fa-check"></i> Complete
+                                        </button>
+                                        <button class="btn btn-danger btn-sm" onclick="updateStatus('${apt._id}', 'cancelled')">
+                                            <i class="fas fa-times"></i> Cancel
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading appointments:', error);
+            }
+        }
+
+        async function updateStatus(appointmentId, status) {
+            try {
+                const response = await fetch(`/api/appointments/${appointmentId}/status`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    loadAppointments();
+                } else {
+                    alert('Error updating appointment status');
+                }
+            } catch (error) {
+                alert('Network error. Please try again.');
+            }
+        }
+
+      
+       async function logout(e) {
+  const btn = e?.currentTarget || e?.target;
+  const orig = btn.innerHTML;
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging out...';
+    const res = await fetch('/api/logout', { method:'POST', credentials:'same-origin' });
+    // handle response...
+    sessionStorage.removeItem('user');
+    window.location.href = '/';
+  } catch (err) {
+    console.error(err);
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+    </script>
+</body>
+
+</html>
